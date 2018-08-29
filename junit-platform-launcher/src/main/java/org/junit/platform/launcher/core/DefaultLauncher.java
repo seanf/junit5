@@ -58,18 +58,51 @@ class DefaultLauncher implements Launcher {
 		Preconditions.condition(testEngines != null && testEngines.iterator().hasNext(),
 			() -> "Cannot create Launcher without at least one TestEngine; "
 					+ "consider adding an engine implementation JAR to the classpath");
-		this.testEngines = validateUniqueIds(testEngines);
+		this.testEngines = validateEngineIds(testEngines);
 	}
 
-	private static Iterable<TestEngine> validateUniqueIds(Iterable<TestEngine> testEngines) {
+	private static Iterable<TestEngine> validateEngineIds(Iterable<TestEngine> testEngines) {
 		Set<String> ids = new HashSet<>();
 		for (TestEngine testEngine : testEngines) {
+			// check usage of reserved id prefix
+			if (!validateReservedIds(testEngine)) {
+				logger.warn(() -> String.format("Thou shalt not use an engine ID starting with 'junit-': '%s'",
+					testEngine.getId()));
+			}
+
+			// check uniqueness
 			if (!ids.add(testEngine.getId())) {
 				throw new JUnitException(String.format(
 					"Cannot create Launcher for multiple engines with the same ID '%s'.", testEngine.getId()));
 			}
 		}
 		return testEngines;
+	}
+
+	// https://github.com/junit-team/junit5/issues/1557
+	private static boolean validateReservedIds(TestEngine testEngine) {
+		String engineId = testEngine.getId();
+		if (!engineId.startsWith("junit-")) {
+			return true;
+		}
+		if (engineId.equals("junit-jupiter")) {
+			validateWellKnownTypeName(testEngine, "org.junit.jupiter.engine.JupiterTestEngine");
+			return true;
+		}
+		if (engineId.equals("junit-vintage")) {
+			validateWellKnownTypeName(testEngine, "org.junit.vintage.engine.VintageTestEngine");
+			return true;
+		}
+		return false;
+	}
+
+	private static void validateWellKnownTypeName(TestEngine testEngine, String expectedTypeName) {
+		String actualTypeName = testEngine.getClass().getTypeName();
+		if (actualTypeName.equals(expectedTypeName)) {
+			return;
+		}
+		throw new JUnitException(
+			String.format("Impostor detected! Expected %s but got: %s", expectedTypeName, actualTypeName));
 	}
 
 	@Override

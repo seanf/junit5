@@ -27,9 +27,13 @@ import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 
 import java.util.Optional;
+import java.util.logging.Level;
+import java.util.logging.LogRecord;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.engine.TrackLogRecords;
 import org.junit.platform.commons.JUnitException;
+import org.junit.platform.commons.logging.LogRecordListener;
 import org.junit.platform.commons.util.PreconditionViolationException;
 import org.junit.platform.engine.ConfigurationParameters;
 import org.junit.platform.engine.EngineDiscoveryRequest;
@@ -56,6 +60,7 @@ import org.mockito.InOrder;
 /**
  * @since 1.0
  */
+@TrackLogRecords
 class DefaultLauncherTests {
 
 	private static final String FOO = DefaultLauncherTests.class.getSimpleName() + ".foo";
@@ -491,4 +496,25 @@ class DefaultLauncherTests {
 		inOrder.verify(listener).testPlanExecutionFinished(same(testPlan));
 	}
 
+	@Test
+	void usingReservedEngineIdPrefixEmitsWarning(LogRecordListener listener) {
+		String id = "junit-using-reserved-prefix";
+		createLauncher(new TestEngineStub(id));
+		assertThat(listener.stream(DefaultLauncher.class, Level.WARNING).map(LogRecord::getMessage)).containsExactly(
+			"Thou shalt not use an engine ID starting with 'junit-': '" + id + "'");
+	}
+
+	@Test
+	void impostBeingJupiterWithoutBeingJupiterFails() {
+		TestEngine impostor = new TestEngineStub("junit-jupiter");
+		Exception exception = assertThrows(JUnitException.class, () -> createLauncher(impostor));
+		assertThat(exception).hasMessageContaining("Impostor detected!");
+	}
+
+	@Test
+	void impostBeingVintageWithoutBeingVintageFails() {
+		TestEngine impostor = new TestEngineStub("junit-vintage");
+		Exception exception = assertThrows(JUnitException.class, () -> createLauncher(impostor));
+		assertThat(exception).hasMessageContaining("Impostor detected!");
+	}
 }
